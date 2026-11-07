@@ -15,7 +15,7 @@
   background: var(--canvas);
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; }[hidden] { display: none !important; }
 body { margin: 0; min-width: 320px; background: var(--canvas); }
 button, input, select { font: inherit; }
 
