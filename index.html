@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=20261107-2" />
+    <link rel="stylesheet" href="style.css?v=20261107-3" />
   </head>
   <body>
     <main class="app-shell">
@@ -91,7 +91,12 @@
               <p class="eyebrow">Tus registros</p>
               <h2 id="history-heading">Historial</h2>
             </div>
-            <span id="movement-count" class="count-pill">0 movimientos</span>
+            <div class="history-actions">
+              <span id="movement-count" class="count-pill">0 movimientos</span>
+              <button id="clear-all-button" class="clear-all-button" type="button" disabled>
+                <span aria-hidden="true">⌫</span> Borrar todo
+              </button>
+            </div>
           </div>
           <div id="empty-state" class="empty-state">
             <div class="empty-icon" aria-hidden="true">⌁</div>
@@ -116,6 +121,34 @@
         </section>
       </section>
     </main>
+
+    <dialog id="delete-movement-dialog" class="confirm-dialog" aria-labelledby="delete-movement-title">
+      <form method="dialog" class="dialog-card">
+        <p class="eyebrow">Confirmar eliminación</p>
+        <h2 id="delete-movement-title">¿Eliminar este movimiento?</h2>
+        <p class="dialog-copy">Se eliminará únicamente este registro.</p>
+        <dl id="movement-details" class="movement-details"></dl>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Cancelar</button>
+          <button id="confirm-delete-button" class="danger-button" value="confirm">Eliminar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="clear-all-dialog" class="confirm-dialog" aria-labelledby="clear-all-title">
+      <form method="dialog" class="dialog-card">
+        <p class="eyebrow">Acción permanente</p>
+        <h2 id="clear-all-title">¿Borrar todos los registros?</h2>
+        <p id="clear-all-summary" class="dialog-copy"></p>
+        <p class="dialog-warning">Esta acción no podrá deshacerse desde la aplicación.</p>
+        <label for="clear-all-confirmation">Escribe <strong>ELIMINAR</strong> para continuar</label>
+        <input id="clear-all-confirmation" type="text" autocomplete="off" spellcheck="false" />
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Cancelar</button>
+          <button id="confirm-clear-all-button" class="danger-button" value="confirm" disabled>Borrar todos los registros</button>
+        </div>
+      </form>
+    </dialog>
     <script src="script.js"></script>
   </body>
 </html>

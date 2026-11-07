@@ -20,8 +20,17 @@ const count = document.querySelector("#movement-count");
 const incomeTotal = document.querySelector("#income-total");
 const expenseTotal = document.querySelector("#expense-total");
 const balanceTotal = document.querySelector("#balance-total");
+const clearAllButton = document.querySelector("#clear-all-button");
+const deleteMovementDialog = document.querySelector("#delete-movement-dialog");
+const movementDetails = document.querySelector("#movement-details");
+const confirmDeleteButton = document.querySelector("#confirm-delete-button");
+const clearAllDialog = document.querySelector("#clear-all-dialog");
+const clearAllSummary = document.querySelector("#clear-all-summary");
+const clearAllConfirmation = document.querySelector("#clear-all-confirmation");
+const confirmClearAllButton = document.querySelector("#confirm-clear-all-button");
 
 let movements = loadMovements();
+let movementPendingDeletion = null;
 
 function loadMovements() {
   try {
@@ -100,6 +109,7 @@ function render() {
     b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0)
   );
   count.textContent = `${movements.length} ${movements.length === 1 ? "movimiento" : "movimientos"}`;
+  clearAllButton.disabled = movements.length === 0;
   emptyState.hidden = ordered.length > 0;
   tableWrapper.hidden = ordered.length === 0;
   list.replaceChildren();
@@ -160,8 +170,49 @@ list.addEventListener("click", (event) => {
   const button = event.target.closest(".delete-button");
   if (!button) return;
   const movement = movements.find((item) => item.id === button.dataset.id);
-  if (!movement || !window.confirm("¿Quieres eliminar este movimiento? Esta acción no se puede deshacer.")) return;
-  movements = movements.filter((item) => item.id !== movement.id);
+  if (!movement) return;
+  movementPendingDeletion = movement;
+  movementDetails.replaceChildren(
+    detailItem("Descripción", movement.description || "Sin descripción"),
+    detailItem("Fecha", formatDate(movement.date)),
+    detailItem("Importe", `${movement.type === "income" ? "+" : "−"}${money(movement.amountCents)}`)
+  );
+  deleteMovementDialog.showModal();
+});
+
+function detailItem(label, value) {
+  const wrapper = document.createElement("div");
+  const term = document.createElement("dt");
+  const description = document.createElement("dd");
+  term.textContent = label;
+  description.textContent = value;
+  wrapper.append(term, description);
+  return wrapper;
+}
+
+deleteMovementDialog.addEventListener("close", () => {
+  if (deleteMovementDialog.returnValue === "confirm" && movementPendingDeletion) {
+    movements = movements.filter((item) => item.id !== movementPendingDeletion.id);
+    saveMovements();
+    render();
+  }
+  movementPendingDeletion = null;
+});
+
+clearAllButton.addEventListener("click", () => {
+  clearAllSummary.textContent = `Se eliminarán ${movements.length} ${movements.length === 1 ? "movimiento" : "movimientos"}.`;
+  clearAllConfirmation.value = "";
+  confirmClearAllButton.disabled = true;
+  clearAllDialog.showModal();
+});
+
+clearAllConfirmation.addEventListener("input", () => {
+  confirmClearAllButton.disabled = clearAllConfirmation.value !== "ELIMINAR";
+});
+
+clearAllDialog.addEventListener("close", () => {
+  if (clearAllDialog.returnValue !== "confirm" || clearAllConfirmation.value !== "ELIMINAR") return;
+  movements = [];
   saveMovements();
   render();
 });
