@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="style.css?v=20261107-3" />
   </head>
   <body>
-    <main class="app-shell">
+    <div class="app-layout"><aside class="sidebar" aria-label="Navegación principal"><div class="sidebar-brand">MF</div><nav class="nav-list"><button class="nav-button active" type="button" data-view="home-view">⌂ Inicio</button><button class="nav-button" type="button" data-view="cashflow-view">⌁ Flujo de caja</button></nav></aside><main class="app-shell"><section id="home-view" class="app-view">
       <header class="page-header">
         <div>
           <p class="eyebrow">Control personal</p>
@@ -120,7 +120,8 @@
           </div>
         </section>
       </section>
-    </main>
+      </section>
+      <section id="cashflow-view" class="app-view" hidden aria-labelledby="cashflow-title"><header class="page-header"><div><p class="eyebrow">Análisis financiero</p><h1 id="cashflow-title">Flujo de caja</h1><p class="intro">Evolución de tu saldo disponible.</p></div></header><section class="panel flow-panel"><div class="flow-controls"><div class="field-group"><label for="cashflow-period">Período</label><select id="cashflow-period"><option value="day">Diario</option><option value="week">Semanal</option><option value="month" selected>Mensual</option><option value="year">Anual</option></select></div><div class="field-group"><label for="cashflow-date">Fecha de consulta</label><input id="cashflow-date" type="date" /></div></div><div class="flow-summary"><article><span>Saldo inicial</span><strong id="flow-opening"></strong></article><article><span>Ingresos</span><strong id="flow-income"></strong></article><article><span>Egresos</span><strong id="flow-expense"></strong></article><article><span>Saldo final</span><strong id="flow-closing"></strong></article></div><div id="chart-empty" class="chart-empty" hidden>No hay movimientos en este período. El saldo inicial se mantiene en el resumen.</div><div id="chart-area" class="chart-area"><canvas id="cashflow-chart" aria-label="Gráfica de saldo acumulado"></canvas><div id="chart-tooltip" class="chart-tooltip" hidden></div></div></section></section></main></div>
 
     <dialog id="delete-movement-dialog" class="confirm-dialog" aria-labelledby="delete-movement-title">
       <form method="dialog" class="dialog-card">
