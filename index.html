@@ -54,6 +54,18 @@
 
           <form id="movement-form" novalidate>
             <div id="form-message" class="form-message" role="alert" aria-live="polite"></div>
+            <div class="voice-control">
+              <button id="voice-button" class="voice-button" type="button" aria-pressed="false">
+                <span class="voice-icon" aria-hidden="true">🎙</span>
+                <span id="voice-button-label">Registrar por voz</span>
+              </button>
+              <p id="voice-status" class="voice-status" aria-live="polite">Di un movimiento, por ejemplo: “Gasté 50 bolivianos en transporte hoy”.</p>
+              <div id="voice-result" class="voice-result" hidden aria-live="polite">
+                <strong>Texto detectado:</strong>
+                <span id="voice-transcript"></span>
+                <p id="voice-review"></p>
+              </div>
+            </div>
             <div class="field-row">
               <div class="field-group">
                 <label for="type">Tipo <span aria-hidden="true">*</span></label>

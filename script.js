@@ -13,6 +13,12 @@ const amountInput = document.querySelector("#amount");
 const dateInput = document.querySelector("#date");
 const descriptionInput = document.querySelector("#description");
 const formMessage = document.querySelector("#form-message");
+const voiceButton = document.querySelector("#voice-button");
+const voiceButtonLabel = document.querySelector("#voice-button-label");
+const voiceStatus = document.querySelector("#voice-status");
+const voiceResult = document.querySelector("#voice-result");
+const voiceTranscript = document.querySelector("#voice-transcript");
+const voiceReview = document.querySelector("#voice-review");
 const list = document.querySelector("#movement-list");
 const emptyState = document.querySelector("#empty-state");
 const tableWrapper = document.querySelector("#history-table-wrapper");
@@ -32,6 +38,10 @@ const navButtons = document.querySelectorAll(".nav-button"), flowView = document
 
 let movements = loadMovements();
 let movementPendingDeletion = null;
+let voiceRecognition = null;
+let voiceListening = false;
+let voiceCancelRequested = false;
+let voiceReceivedResult = false;
 
 function loadMovements() {
   try {
@@ -53,7 +63,7 @@ function saveMovements() {
 }
 
 function populateCategories() {
-  categoryInput.replaceChildren(...categories[typeInput.value].map((category) => {
+  categoryInput.replaceChildren(...(categories[typeInput.value] || []).map((category) => {
     const option = document.createElement("option");
     option.value = category;
     option.textContent = category;
@@ -143,6 +153,196 @@ function localDateToday() {
   const now = new Date();
   const offset = now.getTimezoneOffset();
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
+}
+
+const voiceCategoryKeywords = [
+  { category: "Alimentación", words: ["almuerzo", "desayuno", "cena", "comida", "mercado", "restaurante"] },
+  { category: "Transporte", words: ["taxi", "micro", "bus", "gasolina", "transporte"] },
+  { category: "Educación", words: ["colegio", "universidad", "libro", "libros", "curso"] },
+  { category: "Entretenimiento", words: ["pelicula", "cine", "videojuego", "videojuegos", "entretenimiento"] },
+  { category: "Vivienda", words: ["alquiler", "casa", "vivienda"] },
+  { category: "Servicios", words: ["luz", "agua", "internet", "telefono", "celular"] },
+  { category: "Salud", words: ["medico", "farmacia", "medicina", "salud"] },
+  { category: "Salario", words: ["sueldo", "salario"] },
+  { category: "Freelance", words: ["freelance"] },
+  { category: "Ventas", words: ["venta", "ventas"] },
+  { category: "Inversiones", words: ["inversion", "inversiones"] },
+  { category: "Regalo", words: ["regalo"] }
+];
+
+const spokenUnits = { cero: 0, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, veintiuno: 21, veintidos: 22, veintitres: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29 };
+const spokenTens = { treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90 };
+const spokenHundreds = { cien: 100, ciento: 100, doscientos: 200, trescientos: 300, cuatrocientos: 400, quinientos: 500, seiscientos: 600, setecientos: 700, ochocientos: 800, novecientos: 900 };
+
+function normalizeVoice(text) {
+  return text.toLocaleLowerCase("es-BO").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function spokenInteger(words) {
+  let total = 0, current = 0, found = false;
+  for (const word of words) {
+    if (word === "y") continue;
+    if (word === "mil") { total += (current || 1) * 1000; current = 0; found = true; continue; }
+    if (Object.hasOwn(spokenHundreds, word)) { current += spokenHundreds[word]; found = true; continue; }
+    if (Object.hasOwn(spokenTens, word)) { current += spokenTens[word]; found = true; continue; }
+    if (Object.hasOwn(spokenUnits, word)) { current += spokenUnits[word]; found = true; continue; }
+    return null;
+  }
+  return found ? total + current : null;
+}
+
+function spokenAmountToCents(words) {
+  const marker = words.findIndex(word => word === "con" || word === "coma" || word === "punto");
+  const wholeWords = marker < 0 ? words : words.slice(0, marker);
+  const whole = spokenInteger(wholeWords);
+  if (whole === null) return null;
+  let cents = 0;
+  if (marker >= 0) {
+    const decimalWords = words.slice(marker + 1);
+    const decimal = spokenInteger(decimalWords);
+    if (decimal === null || decimal > 99) return null;
+    cents = decimalWords.length === 1 && decimal < 10 ? decimal * 10 : decimal;
+  }
+  const result = whole * 100 + cents;
+  return Number.isSafeInteger(result) && result > 0 ? result : null;
+}
+
+function voiceAmount(text) {
+  const numeric = text.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:bolivianos?|bs\.?)/i);
+  if (numeric) {
+    const cents = Math.round(Number(numeric[1].replace(",", ".")) * 100);
+    return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+  }
+  const currency = /([a-záéíóúñ\s]+?)\s+(?:bolivianos?|bs\.?)/gi;
+  let match;
+  while ((match = currency.exec(text)) !== null) {
+    const words = normalizeVoice(match[1]).trim().split(/\s+/);
+    for (let start = 0; start < words.length; start += 1) {
+      const cents = spokenAmountToCents(words.slice(start));
+      if (cents) return cents;
+    }
+  }
+  return null;
+}
+
+function voiceType(text) {
+  const normalized = normalizeVoice(text);
+  const income = /\b(recibi|recibido|me pagaron|ingresaron|ingreso|cobre|salario|sueldo)\b/.test(normalized);
+  const expense = /\b(gaste|gasto|pague|pagado|compre|compra|compre|comprado)\b/.test(normalized);
+  return income === expense ? null : income ? "income" : "expense";
+}
+
+function voiceCategory(text, type) {
+  const normalized = normalizeVoice(text);
+  for (const group of voiceCategoryKeywords) {
+    if (categories[type]?.includes(group.category) && group.words.some(word => new RegExp(`\\b${word}\\b`).test(normalized))) {
+      const word = group.words.find(item => new RegExp(`\\b${item}\\b`).test(normalized));
+      return { category: group.category, description: word ? word.charAt(0).toUpperCase() + word.slice(1) : "" };
+    }
+  }
+  return { category: "", description: "" };
+}
+
+function voiceDate(text) {
+  const normalized = normalizeVoice(text);
+  if (/\banteayer\b/.test(normalized)) return addDays(localDateToday(), -2);
+  if (/\bayer\b/.test(normalized)) return addDays(localDateToday(), -1);
+  return localDateToday();
+}
+
+function selectVoiceCategory(category) {
+  populateCategories();
+  if (category) { categoryInput.value = category; return; }
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = "Selecciona una categoría";
+  option.selected = true;
+  categoryInput.prepend(option);
+}
+
+function selectVoiceType(type) {
+  if (type) { typeInput.value = type; return; }
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = "Selecciona un tipo";
+  option.selected = true;
+  typeInput.prepend(option);
+  typeInput.value = "";
+}
+
+function interpretVoice(text) {
+  const type = voiceType(text);
+  const amountCents = voiceAmount(text);
+  selectVoiceType(type);
+  const categoryResult = type ? voiceCategory(text, type) : { category: "", description: "" };
+  selectVoiceCategory(categoryResult.category);
+  amountInput.value = amountCents ? (amountCents / 100).toFixed(2).replace(".", ",") : "";
+  descriptionInput.value = categoryResult.description;
+  dateInput.value = voiceDate(text);
+
+  const missing = [];
+  if (!type) missing.push("el tipo");
+  if (!amountCents) missing.push("el importe");
+  if (type && !categoryInput.value) missing.push("la categoría");
+  voiceResult.hidden = false;
+  voiceTranscript.textContent = `“${text}”`;
+  voiceReview.textContent = missing.length
+    ? `Completa manualmente ${missing.join(", ")} y revisa los datos antes de guardar.`
+    : "Datos completados. Revísalos y presiona “Guardar movimiento” para confirmar.";
+  showMessage(missing.length ? "El reconocimiento necesita algunos datos manuales." : "Movimiento preparado por voz. Aún no se guardó.", missing.length ? "error" : "success");
+}
+
+function setVoiceListening(isListening, status) {
+  voiceListening = isListening;
+  voiceButton.classList.toggle("listening", isListening);
+  voiceButton.setAttribute("aria-pressed", String(isListening));
+  voiceButtonLabel.textContent = isListening ? "Detener escucha" : "Registrar por voz";
+  voiceStatus.textContent = status;
+}
+
+function createVoiceRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  const recognition = new SpeechRecognition();
+  recognition.lang = "es-BO";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = () => setVoiceListening(true, "Escuchando… vuelve a presionar para cancelar.");
+  recognition.onresult = event => {
+    voiceReceivedResult = true;
+    const text = event.results[event.resultIndex][0].transcript.trim();
+    setVoiceListening(false, "Reconocimiento terminado. Revisa los datos detectados.");
+    interpretVoice(text);
+  };
+  recognition.onerror = event => {
+    const messages = { "not-allowed": "No se concedió el permiso del micrófono. Puedes registrar el movimiento manualmente.", "no-speech": "No se detectó voz. Inténtalo nuevamente.", "network": "El reconocimiento no pudo conectarse. Inténtalo más tarde.", aborted: "Reconocimiento cancelado.", "audio-capture": "No se encontró un micrófono disponible." };
+    setVoiceListening(false, messages[event.error] || "El reconocimiento se interrumpió. Puedes intentarlo nuevamente.");
+  };
+  recognition.onend = () => {
+    if (voiceListening) setVoiceListening(false, voiceReceivedResult ? "Reconocimiento terminado." : voiceCancelRequested ? "Reconocimiento cancelado." : "No se detectó voz. Inténtalo nuevamente.");
+    voiceCancelRequested = false;
+  };
+  return recognition;
+}
+
+function setupVoiceRegistration() {
+  voiceRecognition = createVoiceRecognition();
+  if (!voiceRecognition) {
+    voiceButton.disabled = true;
+    voiceStatus.textContent = "Tu navegador no admite registro por voz. El registro manual sigue disponible.";
+    return;
+  }
+  voiceButton.addEventListener("click", () => {
+    if (voiceListening) {
+      voiceCancelRequested = true;
+      voiceRecognition.abort();
+      return;
+    }
+    voiceReceivedResult = false;
+    voiceCancelRequested = false;
+    try { voiceRecognition.start(); } catch { setVoiceListening(false, "No se pudo iniciar el micrófono. Inténtalo nuevamente."); }
+  });
 }
 
 const expensesView = document.querySelector("#expenses-view");
@@ -242,6 +442,7 @@ form.addEventListener("submit", (event) => {
   const category = categoryInput.value;
   const date = dateInput.value;
 
+  if (!categories[type]) return showMessage("Selecciona si el movimiento es un ingreso o un egreso.", "error");
   if (!amountCents) return showMessage("Ingresa un importe positivo válido, con hasta dos decimales.", "error");
   if (!categories[type]?.includes(category)) return showMessage("Selecciona una categoría válida.", "error");
   if (!isValidDate(date)) return showMessage("Ingresa una fecha válida.", "error");
@@ -315,6 +516,7 @@ clearAllDialog.addEventListener("close", () => {
   render();
 });
 
+setupVoiceRegistration();
 populateCategories();
 dateInput.value = localDateToday();
 flowDate.value = localDateToday();
